@@ -1,10 +1,15 @@
 import os
+import csv
 import wget
 import subprocess
 
 import time
 
 from os import path
+
+import git
+
+from subprocess import Popen, PIPE
 
 from git_clone import git_clone
 
@@ -20,10 +25,11 @@ from selenium.common.exceptions import StaleElementReferenceException
 
 from zipfile import ZipFile
 
-chromedriver = '/home/peiliu/chromedriver'
+chromedriver = '~/chromedriver'
 
 archiveMaster = '/archive/master.zip'
 
+## Topis android embodied here with topics/android
 mainHttp = 'https://github.com/topics/android?q=stars%3A'
 keyAction = '+created%3A'
 unscoped = '&unscoped_q=stars%3A'
@@ -35,44 +41,82 @@ options.add_argument('--no-sandbox')
 
 webListFile = './webLinkListS0.txt'
 
-# def get_field_text_if_exists(item, selector):
-#     """Extracts a field by a CSS selector if exists."""
-#     try:
-#         return item.find_element_by_css_selector(selector).text
-#     except NoSuchElementException:
-#         return ""
+TOTAL_MONTH = 12
 
+def check_has_kotlin(folder_name):
+    has_kotlin = 'No'
+    kt_list = os.popen('find ./ -name \*.kt').readlines()
+    if kt_list:
+        has_kotlin = 'Yes'
+    return has_kotlin
 
-# def get_link_if_exists(item, selector):
-#     """Extracts an href attribute value by a CSS selector if exists."""
-#     try:
-#         return item.find_element_by_css_selector(selector).get_attribute("href")
-#     except NoSuchElementException:
-#         return ""
+def check_has_test(folder_name):
+    has_test = 'Yes'
+    java_test = os.popen("find ./ -name \*Test.java -print0 | xargs -0 grep 'package' | awk '$1 !~/(ExampleUnitTest)/'").readlines()
+    kt_test = os.popen("find ./ -name \*Test.kt -print0 | xargs -0 grep 'package' | awk '$1 !~/(ExampleUnitTest)/'").readlines()
+    if not java_test and not kt_test:
+        has_test = 'No'
+    return has_test
 
+def extract_email_address(folder_name):
+    email_list_str = ''
+    raw_email_list = []
+    email_list = []
+    with Popen(["/usr/bin/git", "shortlog", "-sen"], stdout=PIPE, stderr=PIPE) as p:
+        output, errors = p.communicate()
+        raw_email_list = output.decode('utf-8', errors='ignore').splitlines()
+    for line in raw_email_list:
+        spos = line.find('<')
+        address = line[spos + 1:-1]
+        if 'noreply' in line:
+            continue
+        if address not in email_list:
+            email_list.append(address)
+            email_list_str += address + ','
+    return email_list_str[:-1]
 
-# wget the repo zip archive file
-# unzip the archive
-# cd into the folder
-# find ./ -name *.xml | xargs grep '\<activity>'
-# if there are some activity exists in some xml file
-# then the repo is android app
-# else the repo is not android app
+def extractPackageName(folder, xmlPathList):
+    print(xmlPathList)
+    for xmlPath in xmlPathList:
+        if len(xmlPath) == 0:
+            continue
+        tree = None
+        try:
+            tree = ET.parse(xmlPath[:-1])
+        except Exception as e:
+            print(e)
+            continue
+        root = tree.getroot()
+        if 'package' not in root.attrib:
+            continue
+        packageName = root.attrib['package']
+        print(packageName)
+        if packageName != '':
+            has_test = check_has_kotlin(folder)
+            has_kotlin = check_has_kotlin(folder)
+            email_address = extract_email_address(folder)
+            curr_list = [folder, packageName, has_test, has_kotlin, email_address]
+            with open("../PackgeNames.csv", 'a+') as f:
+                writer = csv.write(f)
+                writer.writerow(curr_list)
+            break
 
 def isAndroidApp(filename):
     filefolder = filename
     try:
-        print("trying to change directory:" + filefolder)
         os.chdir(filefolder)
     except Exception as e:
         print('Exception occur')
         print(filefolder)
         print(e)
         return False
-    findRes = os.popen("find ./ -name AndroidManifest.xml -print0 | xargs -0 grep '\<activity>' | awk '$1 !~/(examples|benchmarks|tests)/'").read()
-    os.chdir("../")
+    findRes = os.popen("find ./ -name AndroidManifest.xml -print0 | xargs -0 grep '\<activity>' | awk '$1 !~/(examples|benchmarks|tests)/'").readlines()
     if len(findRes) != 0:
+        xmlPathList = os.popen("find ./ -name AndroidManifest.xml").readlines()
+        extractPackageName(filefolder, xmlPathList)
+        os.chdir("../")
         return True
+    os.chdir("../")
     return False
 
 
@@ -118,63 +162,44 @@ def gh_downloads(website):
         f.write(webStr)
     # len(webLists)
     for url in webLists:
-        rslashpos = url.rfind('/')
-        folderName = url[rslashpos + 1:]
-        userName = url[19:rslashpos]
-        fullName = userName + '#' + folderName
+        repo_name = url[19:]
+        folder_name = url[19:].replace('/', '#')
 
-        if path.exists(fullName):
+        if path.exists(folder_name):
             continue
         try:
-            git_clone(url)
+            git_path = 'git@github.com:' + repo_name + '.git'
+            folder_path = './' + folder_name
+            new_repo = git.Repo.clone_from(url=git_path, to_path=folder_path)
         except Exception as e:
             print(url)
             print(e)
-        else:
-            filefolder = os.popen("ls -lt | grep '^d' | head -1 | awk '{print $9}'").read()[:-1]
-            if filefolder.find(folderName) < 0:
-                print('file name not found')
-                os.popen('rm -rf ' + filefolder)
-                continue
-            fullName = userName + '#' + filefolder
-            mvCmd = 'mv ' + filefolder + ' ' + fullName
-            cmdRes = os.popen(mvCmd).read()
-            isAndroid = isAndroidApp(fullName)
-            removeFolder = "rm -rf " + fullName
+        if path.exists(folder_name):
+            isAndroid = isAndroidApp(folder_name)
+            removeFolder = "rm -rf " + folder_name
             if not isAndroid:
                 print(removeFolder)
                 removeStr = os.popen(removeFolder).read()
 
-fullStars = '0..0'
-timeList = ['2019-12-01..2020-01-01']
-
-for item in timeList:
-    web = mainHttp + fullStars + keyAction + item + unscoped + fullStars + keyAction + item
-    gh_downloads(web)
-
-#monthDayLists = ['-01-01', '-02-01', '-03-01', '-04-01', '-05-01', '-06-01', '-07-01', '-08-01', '-09-01', '-10-01', '-11-01', '-12-01']
-#for stars in range(1):
-#    starsStr = str(stars)
-#    fullStars = starsStr + '..' + starsStr
-#    for year in range(2017, 2020):
-#        i = 0
-#        yearStr = str(year)
-#        if year != 2009:
-#            lastYearStr = str(year - 1)
-#            fullMonth = lastYearStr + monthDayLists[11] + '..' + yearStr + monthDayLists[0]
-#            web = mainHttp + fullStars + keyAction + fullMonth + unscoped + fullStars + keyAction + fullMonth
-#            gh_downloads(web)
-#            print(web)
-#        while i < len(monthDayLists) - 1:
-#            fullMonth = yearStr + monthDayLists[i] + '..' + yearStr + monthDayLists[i + 1]
-#            web = mainHttp + fullStars + keyAction + fullMonth + unscoped + fullStars + keyAction + fullMonth
-#            print(web)
-#            gh_downloads(web)
-#            i += 1
-#        if year == 2019:
-#            nextYearStr = str(year + 1)
-#            fullMonth = yearStr + monthDayLists[11] + '..' + nextYearStr + monthDayLists[0]
-#            web = mainHttp + fullStars + keyAction + fullMonth + unscoped + fullStars + keyAction + fullMonth
-#            gh_downloads(web)
-#            print(web)
-#
+"""
+Code execute from the following for loop
+Just in case, it shows how to download repos with star number ZERO
+You can download any repos with arbitrary star number.
+"""
+monthDayLists = ['-01-01', '-02-01', '-03-01', '-04-01', '-05-01', '-06-01', '-07-01', '-08-01', '-09-01', '-10-01', '-11-01', '-12-01']
+for stars in range(1):
+    starsStr = str(stars)
+    fullStars = starsStr + '..' + starsStr
+    for year in range(2009, 2020):
+        i = 0
+        while i < len(monthDayLists):
+            starYear = str(year)
+            if i == len(monthDayLists) - 1:
+                endYear = str(year + 1)
+            else:
+                endYear = str(year)
+            time_cond = starYear + monthDayLists[i % TOTAL_MONTH] + '..' + endYear + monthDayLists[(i + 1) % TOTAL_MONTH]
+            web = mainHttp + fullStars + keyAction + time_cond + unscoped + fullStars + keyAction + time_cond
+            print(web)
+            gh_downloads(web)
+            i += 1
