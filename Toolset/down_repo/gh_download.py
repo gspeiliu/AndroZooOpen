@@ -28,7 +28,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import NoSuchElementException
 from selenium.common.exceptions import StaleElementReferenceException
 
-chromedriver = '/home/xxxxx/chromedriver'
+chromedriver = '/home/peiliu/chromedriver'
 
 mainHttp = 'https://github.com/topics/android?q=created%3A'
 unscoped = '&unscoped_q=created%3A'
@@ -37,12 +37,12 @@ last_ts = '2020-02-01'
 # https://github.com/
 GIT_LEN = 19
 
-git_https_headers = {'Authorization': 'token ' + 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'}
-
-download_urls = './download_urls.txt'
+git_https_headers = {'Authorization': 'token ' + 'b445153a8589bec2e59fc414a9245d8f2a546ee7'}
 
 options = Options()
 options.add_argument('--no-sandbox')
+options.add_argument('--disable-dev-shm-usage')
+options.add_argument('--headless')
 
 def get_repo_attrib(folder_name):
     attrib_list = ['github']
@@ -75,8 +75,11 @@ def get_repo_attrib(folder_name):
         attrib_list.append(number)
         start = start + pos + step
 
-    repo_json = requests.get(git_api_url, headers=git_https_headers).json()
-
+    try:
+        repo_json = requests.get(git_api_url, headers=git_https_headers).json()
+    except Exception as e:
+        print(e)
+        return []
     create_time = repo_json['created_at']
     update_time = repo_json['updated_at']
     push_time = repo_json['pushed_at']
@@ -104,9 +107,11 @@ def get_repo_attrib(folder_name):
 
     return attrib_list
 
-def is_android_app(folder_name):
+def is_android_app(folder_name, parent_path):
     try:
-        os.chdir(folder_name)
+        curr_path = os.getcwd()
+        folder_path = os.path.join(parent_path, folder_name)
+        os.chdir(folder_path)
     except Exception as e:
         print('Exception occur')
         print(folder_name)
@@ -116,14 +121,15 @@ def is_android_app(folder_name):
     if len(find_res) != 0:
         xml_path_list = os.popen("find ./ -name AndroidManifest.xml").readlines()
         extract_info_list = extract_repo_detail(xml_path_list)
-        print(extract_info_list)
         repo_attrib = get_repo_attrib(folder_name)
-        print(repo_attrib)
+        if not repo_attrib:
+            os.chdir(curr_path)
+            return False, []
         repo_attrib.extend(extract_info_list)
         print(repo_attrib)
-        os.chdir("../")
+        os.chdir(curr_path)
         return True, repo_attrib
-    os.chdir("../")
+    os.chdir(curr_path)
     return False, []
 
 def is_kotlin_exist():
@@ -192,9 +198,36 @@ def extract_repo_detail(xml_path_list):
         curr_detail_list.append(email_address_str)
     return curr_detail_list
 
+def github_repo_download(web_url_list, parent_path):
+    # len(web_url_list)
+    for url in web_url_list:
+        repo_name = url[GIT_LEN:]
+        folder_name = url[GIT_LEN:].replace('/', '#')
 
+        if path.exists(folder_name):
+            continue
+        try:
+            git_path = 'git@github.com:' + repo_name + '.git'
+            folder_path = os.path.join(parent_path, folder_name)
+            new_repo = git.Repo.clone_from(url=git_path, to_path=folder_path)
+        except Exception as e:
+            print(url)
+            print(e)
+        else:
+            is_android, curr_row = is_android_app(folder_name, parent_path)
+            rm_folder = "rm -rf " + folder_name
+            if not is_android:
+                print(rm_folder)
+                re_str = os.popen(rm_folder).read()
+            else:
+                # write to the csv file
+                csv_file_path = os.path.join(parent_path, 'github_repo.csv')
+                with open(csv_file_path, 'a+') as f:
+                    writer = csv.writer(f)
+                    writer.writerow(curr_row)
 
-def gh_downloads(website):
+def github_url_retrieve(website, parent_path):
+    print(website)
     ignored_exceptions=(NoSuchElementException,StaleElementReferenceException,)
     driver = webdriver.Chrome(chromedriver, options=options)
     wait = WebDriverWait(driver, 10, ignored_exceptions=ignored_exceptions)
@@ -232,39 +265,18 @@ def gh_downloads(website):
 
     print(len(web_url_list))
 
-    with open(download_urls, 'a+') as f:
+    download_urls_path = os.path.join(parent_path, 'download_urls.txt')
+    with open(download_urls_path, 'a+') as f:
         f.write(web_urls_str)
-    # len(web_url_list)
-    for url in web_url_list:
-        repo_name = url[GIT_LEN:]
-        folder_name = url[GIT_LEN:].replace('/', '#')
 
-        if path.exists(folder_name):
-            continue
-        try:
-            git_path = 'git@github.com:' + repo_name + '.git'
-            folder_path = './' + folder_name
-            new_repo = git.Repo.clone_from(url=git_path, to_path=folder_path)
-        except Exception as e:
-            print(url)
-            print(e)
-        else:
-            is_android, curr_row = is_android_app(folder_name)
-            rm_folder = "rm -rf " + folder_name
-            if not is_android:
-                print(rm_folder)
-                re_str = os.popen(rm_folder).read()
-            else:
-                # write to the csv file
-                with open('./gh_repo.csv', 'a+') as f:
-                    writer = csv.writer(f)
-                    writer.writerow(curr_row)
+    return web_url_list
 
-
-if __name__ == '__main__':
-    time_slot = last_ts + '..2020-03-01'
+def github_download(new_date):
+    time_slot = last_ts + '..' + new_date
     web = mainHttp + time_slot + unscoped + time_slot
     print(web)
-    gh_downloads(web)
+    web_url_list = github_url_retrieve(web, './')
+    github_repo_download(web_url_list, './')
 
-
+if __name__ == '__main__':
+    github_download('2020-03-01')

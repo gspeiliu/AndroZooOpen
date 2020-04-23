@@ -1,4 +1,2 @@
-ch.zhaw.facerecognition
-ch.zhaw.facerecognition
-cn.easyar.samples.helloarvideo
+cn.easyar.samples.helloarvideoddfgdf
 co.appbrewery.xylophone

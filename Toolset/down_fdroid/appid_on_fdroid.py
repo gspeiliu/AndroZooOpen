@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# -*- encoding: utf-8 -*-
+
 import os
 import csv
 import requests
@@ -36,21 +39,26 @@ def extract_package(url):
                 pkg_list.append(a_pkg.get('href'))
     return extract_pkg_name(pkg_list)
 
-def extract_pkg_info():
+def extract_pkg_info(parent_path):
+    ret_pkg_list = []
     all_pkg = []
     base_url = 'https://f-droid.org/en/packages/'
     first_pkg_list = extract_package(base_url)
     all_pkg.extend(first_pkg_list)
     for page_num in gen_page_num():
-        print('page num:', page_num)
         url = base_url + str(page_num) + '/index.html'
         ret_list = extract_package(url)
         if not ret_list:
             break
         all_pkg.extend(ret_list)
     write_pkg = [pkg + '\n' for pkg in all_pkg]
-    with open('fdroid_pkg.txt', 'w') as f:
+    txt_file_path = os.path.join(parent_path, 'fdroid_pkg.txt')
+    with open(txt_file_path, 'w') as f:
         f.writelines(write_pkg)
+    for pkg_name in all_pkg:
+        if pkg_name not in ret_pkg_list:
+            ret_pkg_list.append(pkg_name)
+    return ret_pkg_list
 
 if __name__ == '__main__':
-    extract_pkg_info()
+    extract_pkg_info('./')
