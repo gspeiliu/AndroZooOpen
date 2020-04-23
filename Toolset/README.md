@@ -8,3 +8,6 @@
 
 #### down\_fdroid
 * The folder contains code to extract repo host url and repo's package name from fdroid official site 
+
+#### weekly\_update.py
+* Python file used to generate the full list of data in the format of AndroZooOpen csv file. By executing the file, it will download repos from Github from date 2020-04-01 to the date of the day the file executed.
