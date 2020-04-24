@@ -7,6 +7,9 @@ import gzip
 import tarfile
 import requests
 
+import threading
+import time
+
 import shutil
 
 from datetime import date
@@ -20,6 +23,7 @@ LAST_DATE = '2020-04-01'
 CURR_DATE = date.today().isoformat()
 PARENT_PATH = ''
 
+TIME_INTERVAL = 7 * 24 * 60 * 60
 
 mainHttp = 'https://github.com/topics/android?q=created%3A'
 unscoped = '&unscoped_q=created%3A'
@@ -152,11 +156,16 @@ def update():
     check_google_fdroid(androzoo_pkgs, fd_pkgs)
     update_checked_sites(down_url_list)
 
-
-if __name__ == '__main__':
-    ### create new folder to store current updates
+def timer_handler():
+    global timer, TIME_INTERVAL
     CURR_DATE = date.today().isoformat()
-    if not os.path.isdir(os.path.join('./', CURR_DATE)):
+    if not os.path.isdir(os.path.join(os.getcwd(), CURR_DATE)):
         os.mkdir(CURR_DATE)
     PARENT_PATH = os.path.join(os.getcwd(), CURR_DATE)
     update()
+    timer = threading.Timer(TIME_INTERVAL, timer_handler)
+    timer.start()
+
+if __name__ == '__main__':
+    ### create new folder to store current updates
+    timer_handler()
