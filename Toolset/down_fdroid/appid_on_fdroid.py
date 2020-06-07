@@ -25,7 +25,7 @@ def extract_pkg_name(pkg_list):
 def extract_package(url):
     print(url)
     pkg_list = []
-    headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.122 Safari/537.36'}
+    headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.138 Safari/537.36'}
     req = request.Request(url, headers = headers)
     try:
         text = request.urlopen(req).read()
@@ -41,16 +41,23 @@ def extract_package(url):
 
 def extract_pkg_info(parent_path):
     ret_pkg_list = []
+    categories = ['connectivity', 'development', 'games', 'graphics', 'internet', 'money', 'multimedia', 'navigation', 'phone-sms', 'reading', 'science-education', 'security', 'sports-health', 'system', 'theming', 'time', 'writing']
     all_pkg = []
-    base_url = 'https://f-droid.org/en/packages/'
-    first_pkg_list = extract_package(base_url)
-    all_pkg.extend(first_pkg_list)
-    for page_num in gen_page_num():
-        url = base_url + str(page_num) + '/index.html'
+    base_url = 'https://f-droid.org/en/categories/'
+    for item in categories:
+        url = base_url + item
         ret_list = extract_package(url)
         if not ret_list:
-            break
+            continue
         all_pkg.extend(ret_list)
+#    first_pkg_list = extract_package(base_url)
+#    all_pkg.extend(first_pkg_list)
+#    for page_num in gen_page_num():
+#        url = base_url + str(page_num) + '/index.html'
+#        ret_list = extract_package(url)
+#        if not ret_list:
+#            break
+#        all_pkg.extend(ret_list)
     write_pkg = [pkg + '\n' for pkg in all_pkg]
     txt_file_path = os.path.join(parent_path, 'fdroid_pkg.txt')
     with open(txt_file_path, 'w') as f:
