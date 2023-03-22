@@ -1,3 +1,4 @@
 # AndroZooOpen
 ---
-#### This repo serves as a supplementary for our project [AndroZooOpen](http://knowledgezoo.xyz/AndroZooOpen/) and provides the toolset for implementation.
+
+### AndroZooOpen.csv file is attached listing the Android repositories collected from Github.
