@@ -2,7 +2,9 @@
 ----
 Updates:
 ```gh_download_websites.py``` used to download any repositories under topic **Android**
+
 ```get_android_repos.py``` used to download latest tree info (please refer to Github API v3 for the explanation of the tree)
+
 ```get_git_android_repos.py``` used to check if the project contains the special file **AndroidManifest.xml** 
 <!--* Just by executing ```python gh_download.py``` to down repositories from Github under topic **android**.
 * **Notice**
